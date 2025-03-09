@@ -1,55 +1,105 @@
--- hello_plugin/init.lua
-
-local function move()
-  local found = vim.fn.search("%%", "b")
-  if found == 0 then
-    print("No instance of '%%' found before the cursor.")
-  end
+-- Bring cell functionality to neovim
+local function copy_text(start, stop)
+  local lines = vim.api.nvim_buf_get_lines(0, start - 1, stop, false)
+  local copied_text = table.concat(lines, "\n")
+  -- You can use the system clipboard or Neovim's unnamed register
+  vim.fn.setreg("+", copied_text) -- Copy to system clipboard
+  -- vim.fn.setreg('"', copied_text)  -- Copy to unnamed register
 end
-
-local function copy()
-  local start = vim.fn.line(".")
-  local end_line = vim.fn.line("w$")
-  local start_line = vim.fn.line("w0")
-  local text = ""
-  local cell_found = false
-
-  for i = start, start_line do
-    local line = vim.fn.getline(i)
-    if cell_found then
-      local finish = line:find("%%")
-      if finish then
-        text = text .. line:sub(1, finish - 1)
-      end
+local function find_cell_start()
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)[1] -- Get current line number
+  for i = cursor_pos - 1, 1, -1 do
+    local line = vim.api.nvim_buf_get_lines(0, i - 1, i, false)[1]
+    if line and line:find("%%") then
+      return i -- Return the line number if found
     end
   end
-
-  local cell_found = false
-  for i = start, end_line do
-    local line = vim.fn.getline(i)
-    local start = line:find("%%")
-
-    if cell_found then
-      local finish = line:find("%%")
-      if finish then
-        text = text .. line:sub(1, finish - 1)
-        break
-      else
-        text = text .. line .. "\n"
-      end
-      vim.fn.setreg('"', text)
-      vim.notify("Copied text: " .. text, vim.log.levels.INFO)
-    else
-      if start then
-        cell_found = true
-        text = text .. line:sub(start + 2) .. "\n" -- Start copying after the first %%
-      end
+  return 1
+end
+local function find_cell_end()
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)[1] -- Get current line number
+  local last_line = vim.api.nvim_buf_line_count(0)
+  for i = cursor_pos + 1, last_line do
+    local line = vim.api.nvim_buf_get_lines(0, i - 1, i, false)[1]
+    if line and line:find("%%") then
+      return i - 1
     end
   end
+  return last_line
 end
+local function copy_cell()
+  local a = find_cell_start()
+  local b = find_cell_end()
+  copy_text(a, b)
+  vim.notify("Copied text: " .. a .. "," .. b .. ". " .. vim.log.levels.INFO)
+end
+local function prev_cell()
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)[1] -- Get current line number
+  for i = cursor_pos - 1, 1, -1 do -- Iterate downwards
+    local line = vim.api.nvim_buf_get_lines(0, i - 1, i, false)[1]
+    if line and line:find("%%") then
+      return i
+    end
+  end
+  return 1
+end
+local function next_cell()
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)[1] -- Get current line number
+  local last_line = vim.api.nvim_buf_line_count(0) -- Get total number of lines in the buffer
+  for i = cursor_pos + 1, last_line do -- Iterate downwards
+    local line = vim.api.nvim_buf_get_lines(0, i - 1, i, false)[1]
+    if line and line:find("%%") then
+      return i
+    end
+  end
+  return last_line
+end
+local function move_cursor(line)
+  vim.api.nvim_win_set_cursor(0, { line, 0 }) -- Move cursor to the found line
+end
+local function move_next_cell()
+  local line = next_cell()
+  move_cursor(line)
+end
+local function move_prev_cell()
+  local line = prev_cell()
+  move_cursor(line)
+end
+local function copy_multiple_cells()
+  local start = find_cell_start()
+  local stop = next_cell() -- Move to the next cell
+  copy_text(start, stop)
+end
+vim.api.nvim_set_keymap("n", "<leader>a", "<Nop>", { noremap = true, silent = true, desc = "Cell motions" })
 
-vim.api.nvim_create_user_command("MoveCell", move, {})
-vim.api.nvim_set_keymap("n", "<leader>aa", ":MoveCell<CR>", { noremap = true, silent = true })
+vim.api.nvim_create_user_command("Copycell", copy_cell, {})
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>ay",
+  ":Copycell<CR>",
+  { noremap = true, silent = true, desc = "Yank current cell" }
+)
 
-vim.api.nvim_create_user_command("CopyCell", copy, {})
-vim.api.nvim_set_keymap("n", "<leader>ac", ":CopyCell<CR>", { noremap = true, silent = true })
+vim.api.nvim_create_user_command("Movenextcell", move_next_cell, {})
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>an",
+  ":Movenextcell<CR>",
+  { noremap = true, silent = true, desc = "Go next cell" }
+)
+
+vim.api.nvim_create_user_command("Moveprevcell", move_prev_cell, {})
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>ab",
+  ":Moveprevcell<CR>",
+  { noremap = true, silent = true, desc = "Go prev cell" }
+)
+
+vim.api.nvim_create_user_command("Copymulticell", copy_multiple_cells, {})
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>am",
+  ":Copymulticell<CR>",
+  { noremap = true, silent = true, desc = "copy multiple cell" }
+)

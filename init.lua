@@ -1,4 +1,8 @@
 -- Bring cell functionality to neovim
+-- TODO: Make cell tag configurable
+-- TODO: Config options usable in neovim
+-- TODO: Add copy_multiple_cells()
+-- TODO: Add cut_cells() and or highlight_cells()
 local function copy_text(start, stop)
   local lines = vim.api.nvim_buf_get_lines(0, start - 1, stop, false)
   local copied_text = table.concat(lines, "\n")
@@ -72,10 +76,11 @@ local function move_prev_cell()
   move_cursor(line)
 end
 local function copy_multiple_cells(opts)
+  opts = opts or { args = "1" } -- Default to "1" if opts is nil
   local start = get_cell_start()
-  local stop = get_next_cell(opts) -- Move to the next cell
+  local stop = get_next_cell(opts)
   copy_text(start, stop)
-  vim.notify("Copied cells from line " .. start .. " to line " .. stop .. ". ", vim.log.levels.INFO)
+  vim.notify("Copied " .. opts.args .. " cells", vim.log.levels.INFO)
 end
 
 vim.api.nvim_set_keymap("n", "<leader>a", "<Nop>", { noremap = true, silent = true, desc = "Cell motions" })
@@ -108,6 +113,6 @@ vim.api.nvim_create_user_command("Copymulticell", copy_multiple_cells, { nargs =
 vim.api.nvim_set_keymap(
   "n",
   "<leader>am",
-  ":Copymulticell<CR>",
-  { noremap = true, silent = true, desc = "copy multiple cell" }
+  ":Copymulticell ",
+  { noremap = true, silent = false, desc = "Copy multiple cells" }
 )
